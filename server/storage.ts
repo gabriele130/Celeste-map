@@ -1,37 +1,75 @@
-import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
+import type { AuthTokens, SessionInfo, UserMe, CustomerMe } from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
+export interface SessionData {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  user?: UserMe;
+  customer?: CustomerMe;
+}
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createSession(tokens: AuthTokens, user?: UserMe, customer?: CustomerMe): string;
+  getSession(sessionId: string): SessionData | undefined;
+  updateSession(sessionId: string, data: Partial<SessionData>): void;
+  deleteSession(sessionId: string): void;
+  getSessionInfo(sessionId: string): SessionInfo;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private sessions: Map<string, SessionData>;
 
   constructor() {
-    this.users = new Map();
+    this.sessions = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  createSession(tokens: AuthTokens, user?: UserMe, customer?: CustomerMe): string {
+    const sessionId = randomUUID();
+    const expiresAt = Date.now() + tokens.expires_in * 1000;
+    
+    this.sessions.set(sessionId, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt,
+      user,
+      customer,
+    });
+
+    return sessionId;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  getSession(sessionId: string): SessionData | undefined {
+    return this.sessions.get(sessionId);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  updateSession(sessionId: string, data: Partial<SessionData>): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      this.sessions.set(sessionId, { ...session, ...data });
+    }
+  }
+
+  deleteSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
+  getSessionInfo(sessionId: string): SessionInfo {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return { isAuthenticated: false };
+    }
+
+    if (session.expiresAt < Date.now()) {
+      this.sessions.delete(sessionId);
+      return { isAuthenticated: false };
+    }
+
+    return {
+      isAuthenticated: true,
+      user: session.user,
+      customer: session.customer,
+    };
   }
 }
 
