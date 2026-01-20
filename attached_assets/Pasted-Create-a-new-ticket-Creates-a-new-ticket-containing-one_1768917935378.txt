@@ -1,0 +1,127 @@
+Create a new ticket
+Creates a new ticket containing one or more products for a specific vehicle with VIN It is not possible to create a ticket on a connector when there is a pending ticket on the connector.
+
+Security
+OAuth2 or JifelineAuthorizer
+Request
+Request Body schema: application/json
+required
+Creates a ticket
+
+vin
+required
+string
+The Vehicle Identification number the ticket is created for
+
+vehicle_model_id
+required
+integer
+The ID of the vehicle model
+
+vehicle_model_variant_id
+required
+integer
+The ID of the vehicle model variant
+
+connector_id
+required
+integer
+The ID of the connected connector
+
+voucher	
+string
+Voucher code for discount
+
+product_ids
+required
+Array of integers
+Array of products ids that will be purchased in the ticket
+
+product_prerequisites	
+Array of objects (Answer to a product prerequisite)
+Ticket attributes are answers on the product prerequisite of the products in the ticket
+
+metadata
+required
+object
+Metadata for the ticket
+
+prepared_ticket_id	
+string or null <uuid>
+The identifier of the prepared ticket
+
+reference	
+string
+Default: ""
+Reference of the ticket
+
+confirmed_unattended_service	
+boolean
+Default: false
+true if confirmation for auto-outsourcing to an unattended service is given.
+
+Responses
+201Created
+400Returned when a client sends a bad request.
+401Returned when a request is performed without or with an incorrect OIDC token
+500Returned when an error occurs on the server
+post
+/v1/tickets
+Try it
+Copy
+https://customer-api-001.prd.jifeline.cloud/v1/tickets
+Request samples
+Payload
+application/json
+CopyExpand allCollapse all
+{
+"vin": "JFL91010104391010",
+"vehicle_model_id": "284841",
+"vehicle_model_variant_id": "284841",
+"connector_id": 910101043,
+"voucher": "234MD23",
+"product_ids": [
+52351,
+52352
+],
+"product_prerequisites": [
+{}
+],
+"metadata": {
+"app_name": "Web Client",
+"app_version": "1.16.6",
+"platform": "Mac OS",
+"platform_version": "10.15.6",
+"device_manufacturer": "Apple",
+"device_model": "Chrome 92.0.4515.159",
+"battery_state": "67",
+"locale": "nl_NL",
+"latitude": "51.985104",
+"longitude": "5.898730",
+"vin_is_found_by_reader": true
+},
+"prepared_ticket_id": "ca09a970-6519-4280-b6a6-65727e2894e3",
+"reference": "aa-bb-12",
+"confirmed_unattended_service": true
+}
+Response samples
+201
+400
+401
+500
+application/json
+CopyExpand allCollapse all
+{
+"id": "3",
+"uuid": "abcb2f39-7620-401a-8dab-ec2f6075ed8a",
+"vin": "JFL91010104591010",
+"vinNumber": "JFL91010104591010",
+"vehicle_model_id": 23423,
+"vehicle_model_variant_id": 23423,
+"product_ids": [
+[]
+],
+"chat_id": "2349283_416e4c77-4fc0-40ca-b5a5-95a12c4e84e8",
+"connector_id": 990001234,
+"state": 1
+}
