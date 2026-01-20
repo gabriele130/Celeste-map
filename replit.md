@@ -61,10 +61,15 @@ A modern Customer Portal web application that integrates with the Jifeline Custo
    - **Pincode**: Connector UUID + pincode (calls `/v2/authenticate/pincode`)
    - **OTP**: One-time password (calls `/v1/authenticate/otp`)
 2. BFF receives tokens from external API
-3. Session is stored server-side with tokens
+3. Session is stored server-side with access token, refresh token, and expiry time
 4. Session ID is set as httpOnly cookie
 5. Frontend never sees the actual access/refresh tokens
 6. All API requests go through BFF which injects the Bearer token
+
+### Token Refresh
+The BFF implements automatic token refresh in two ways:
+- **Proactive refresh**: Before proxying requests, checks if token expires within 5 minutes and refreshes preemptively
+- **Reactive refresh**: On 401 responses from the API, attempts to refresh the token and retry the failed request
 
 ## Environment Variables
 The application requires the following environment variable:
@@ -152,3 +157,11 @@ This starts both the Express backend and Vite frontend dev server on port 5000.
 3. **Component Library**: Using shadcn/ui for consistent, accessible UI components.
 
 4. **Type Safety**: Full TypeScript with shared schemas between frontend and backend.
+
+## Production Considerations
+Before deploying to production, consider:
+1. **Session Storage**: Replace in-memory session storage with Redis or PostgreSQL for durability across restarts and horizontal scaling
+2. **Token Refresh Endpoint**: Verify the refresh endpoint path (`/v1/authenticate/refresh`) matches the actual Jifeline API specification
+3. **Rate Limiting**: Add rate limiting middleware to prevent abuse
+4. **Error Logging**: Integrate proper logging service for debugging production issues
+5. **Query Key Patterns**: The React Query URL builder expects path segments followed by an optional query params object - ensure all pages follow this pattern
