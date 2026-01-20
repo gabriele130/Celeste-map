@@ -41,7 +41,37 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const basePath = queryKey[0] as string;
+    const params = queryKey.slice(1);
+    
+    let url = basePath;
+    if (params.length > 0) {
+      const hasQueryParams = params.some(p => typeof p === 'object');
+      if (hasQueryParams) {
+        const queryParams = params.find(p => typeof p === 'object') as Record<string, string> | undefined;
+        const pathParams = params.filter(p => typeof p !== 'object' && p !== undefined && p !== null);
+        
+        if (pathParams.length > 0) {
+          url = `${basePath}/${pathParams.join('/')}`;
+        }
+        
+        if (queryParams && Object.keys(queryParams).length > 0) {
+          const searchParams = new URLSearchParams(
+            Object.entries(queryParams).filter(([_, v]) => v !== undefined && v !== null && v !== '') as [string, string][]
+          );
+          if (searchParams.toString()) {
+            url = `${url}?${searchParams.toString()}`;
+          }
+        }
+      } else {
+        const pathParams = params.filter(p => p !== undefined && p !== null);
+        if (pathParams.length > 0) {
+          url = `${basePath}/${pathParams.join('/')}`;
+        }
+      }
+    }
+    
+    const res = await fetch(url, {
       credentials: "include",
     });
 

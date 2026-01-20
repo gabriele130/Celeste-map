@@ -18,6 +18,7 @@ import {
 
 const API_BASE_URL = process.env.API_BASE_URL || "https://api.example.com";
 const SESSION_COOKIE = "jfl_session";
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 async function apiRequest(
   path: string, 
@@ -32,6 +33,23 @@ async function apiRequest(
 
   const url = `${API_BASE_URL}${path}`;
   return fetch(url, { ...options, headers });
+}
+
+async function refreshTokens(refreshToken: string): Promise<{ access_token: string; refresh_token?: string; expires_in: number } | null> {
+  try {
+    const response = await apiRequest("/v1/authenticate/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function getSessionId(req: Request): string | undefined {
@@ -51,7 +69,7 @@ function clearSessionCookie(res: Response): void {
   res.clearCookie(SESSION_COOKIE);
 }
 
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
+async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const sessionId = getSessionId(req);
   if (!sessionId) {
     res.status(401).json({ message: "Unauthorized" });
@@ -59,13 +77,33 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   }
 
   const session = storage.getSession(sessionId);
-  if (!session || session.expiresAt < Date.now()) {
+  if (!session) {
     clearSessionCookie(res);
     res.status(401).json({ message: "Session expired" });
     return;
   }
 
-  (req as any).session = session;
+  if (session.expiresAt < Date.now() + TOKEN_REFRESH_BUFFER_MS && session.refreshToken) {
+    const newTokens = await refreshTokens(session.refreshToken);
+    if (newTokens) {
+      storage.updateSession(sessionId, {
+        accessToken: newTokens.access_token,
+        refreshToken: newTokens.refresh_token || session.refreshToken,
+        expiresAt: Date.now() + newTokens.expires_in * 1000,
+      });
+      (req as any).session = storage.getSession(sessionId);
+    } else {
+      clearSessionCookie(res);
+      res.status(401).json({ message: "Session expired" });
+      return;
+    }
+  } else if (session.expiresAt < Date.now()) {
+    clearSessionCookie(res);
+    res.status(401).json({ message: "Session expired" });
+    return;
+  }
+
+  (req as any).session = storage.getSession(sessionId);
   (req as any).sessionId = sessionId;
   next();
 }
@@ -78,12 +116,33 @@ async function proxyRequest(
   body?: unknown
 ): Promise<void> {
   const session = (req as any).session;
+  const sessionId = (req as any).sessionId;
   
   try {
-    const response = await apiRequest(apiPath, {
+    let response = await apiRequest(apiPath, {
       method,
       body: body ? JSON.stringify(body) : undefined,
     }, session?.accessToken);
+
+    if (response.status === 401 && session?.refreshToken) {
+      const newTokens = await refreshTokens(session.refreshToken);
+      if (newTokens) {
+        storage.updateSession(sessionId, {
+          accessToken: newTokens.access_token,
+          refreshToken: newTokens.refresh_token || session.refreshToken,
+          expiresAt: Date.now() + newTokens.expires_in * 1000,
+        });
+        
+        response = await apiRequest(apiPath, {
+          method,
+          body: body ? JSON.stringify(body) : undefined,
+        }, newTokens.access_token);
+      } else {
+        clearSessionCookie(res);
+        res.status(401).json({ message: "Session expired" });
+        return;
+      }
+    }
 
     const contentType = response.headers.get("content-type");
     
@@ -396,6 +455,11 @@ export async function registerRoutes(
 
   app.get("/api/chats/:id", requireAuth, (req, res) => {
     proxyRequest(req, res, "GET", `/v1/chats/${req.params.id}`);
+  });
+
+  app.get("/api/chats", requireAuth, (req, res) => {
+    const query = new URLSearchParams(req.query as Record<string, string>).toString();
+    proxyRequest(req, res, "GET", `/v1/chats${query ? `?${query}` : ""}`);
   });
 
   app.get("/api/service-center", requireAuth, (req, res) => {

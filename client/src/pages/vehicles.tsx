@@ -32,17 +32,17 @@ export default function VehiclesPage() {
   });
 
   const modelGroupsQuery = useQuery<VehicleModelGroup[]>({
-    queryKey: ["/api/vehicles/model-groups", selectedMake?.id],
+    queryKey: ["/api/vehicles/model-groups", { make_id: selectedMake?.id?.toString() }],
     enabled: viewLevel === "modelGroups" && !!selectedMake,
   });
 
   const modelsQuery = useQuery<VehicleModel[]>({
-    queryKey: ["/api/vehicles/models", selectedModelGroup?.id],
+    queryKey: ["/api/vehicles/models", { model_group_id: selectedModelGroup?.id?.toString() }],
     enabled: viewLevel === "models" && !!selectedModelGroup,
   });
 
   const variantsQuery = useQuery<VehicleModelVariant[]>({
-    queryKey: ["/api/vehicles/model-variants", selectedModel?.id],
+    queryKey: ["/api/vehicles/model-variants", { model_id: selectedModel?.id?.toString() }],
     enabled: viewLevel === "variants" && !!selectedModel,
   });
 

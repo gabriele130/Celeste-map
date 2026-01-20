@@ -50,7 +50,7 @@ export default function TicketsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const ticketsQuery = useQuery<PreparedTicketsResponse>({
-    queryKey: ["/api/prepared-tickets", searchVin, ITEMS_PER_PAGE, offset],
+    queryKey: ["/api/prepared-tickets", { vin: searchVin, limit: ITEMS_PER_PAGE.toString(), offset: offset.toString() }],
     enabled: !!searchVin,
   });
 

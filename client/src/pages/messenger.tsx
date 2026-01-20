@@ -46,7 +46,7 @@ export default function MessengerPage() {
   });
 
   const attachmentsQuery = useQuery<ChannelAttachment[]>({
-    queryKey: ["/api/channel-attachments", searchChannelId],
+    queryKey: ["/api/channel-attachments", { channel_id: searchChannelId }],
     enabled: !!searchChannelId,
   });
 
