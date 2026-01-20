@@ -1,0 +1,177 @@
+Sei un Senior Full-Stack Engineer. Genera una web app completa che usa ESCLUSIVAMENTE le API descritte qui: https://customer-api-docs-001.redoc.ly/
+
+OBIETTIVO
+Costruisci un “Customer Portal” moderno con:
+- Sidebar + layout responsive (desktop/mobile)
+- Pagine per tutte le principali risorse API (profilo, wallet, veicoli, prodotti, preferiti, carrello/prezzi, ticket, chat, dipendenti, service center, system, messenger)
+- Autenticazione tramite login con connector_uuid + pincode (endpoint v2) e login OTP, più “forgot password”
+- Gestione sicura dei token (access_token + refresh_token) con refresh automatico e logout
+- UI pulita con stati loading/error/empty e toast notifiche
+- Ricerca, filtri, paginazione dove ha senso (es. tickets prepared con limit/offset)
+- Integrazione totale con le API: ogni pagina deve fare chiamate reali verso gli endpoint documentati.
+
+STACK TECNOLOGICO (vincolante)
+- Frontend: Next.js (App Router) + TypeScript + TailwindCSS + shadcn/ui
+- Data fetching: TanStack React Query
+- Backend BFF: Node.js + Express (TypeScript)
+  - Motivo: evitare CORS e NON esporre token nel browser
+  - Il frontend chiama SOLO il backend BFF (/api/*); il BFF chiama le API reali (base URL configurabile via env)
+- Validazione: Zod per request/response critiche
+- Lint/format: eslint + prettier (config base)
+
+REPLIT
+Genera tutto pronto per partire su Replit:
+- Un monorepo con 2 app: /apps/web (Next) e /apps/server (Express)
+- Script root: npm run dev avvia web + server in parallelo
+- README con setup (env, run, build)
+- Nessun segreto hardcodato: tutto in .env.example
+
+CONFIGURAZIONE ENV (crea .env.example)
+SERVER:
+- API_BASE_URL=<base url delle API (senza slash finale)>
+- PORT=3001
+- JWT_STORAGE_KEY opzionale (se usi session encryption) oppure usa cookie httpOnly firmati
+
+WEB:
+- NEXT_PUBLIC_BFF_BASE_URL=http://localhost:3001
+
+AUTENTICAZIONE & SICUREZZA (vincoli)
+- Il BFF gestisce i token:
+  - Salva access_token e refresh_token in cookie HTTP-only (consigliato) oppure in session store in-memory per MVP (ma spiega limiti).
+  - Implementa refresh automatico: se una chiamata alle API risponde 401, prova refresh (se esiste endpoint in doc; se non esiste, gestisci logout e richiesta nuovo login).
+- Il frontend non deve MAI vedere refresh_token.
+- Proteggi le route: se non autenticato reindirizza a /login.
+- Gestisci errori in modo consistente (standard error shape).
+
+ARCHITETTURA ROUTING (Next App Router)
+- /login
+  - Tab: “Pincode (UUID)” e “OTP”
+  - Form con validazione Zod
+  - On success: redirect /dashboard
+- /dashboard
+  - Overview cards: user, customer, wallet balance, service center status (se disponibile)
+- /profile
+  - Mostra dati da:
+    - GET /v1/users/me
+    - GET /v1/customers/me
+    - GET /v1/customer-wallet
+  - Form “Edit customer details” (PUT endpoint se presente in doc) con salvataggio e toast
+- /vehicles
+  - Navigazione interna:
+    - Makes list
+    - Model groups
+    - Models
+    - Variants
+  - Ogni livello usa gli endpoint veicoli del tag Vehicles (list e single)
+  - UI con breadcrumb e ricerca
+- /products
+  - Lista prodotti (se endpoint disponibile) o, se la doc non prevede lista generica, implementa almeno:
+    - Sezione “Favorites”
+    - POST /v1/favorite-products (aggiungi)
+    - DELETE /v1/favorite-products/{id} (rimuovi)
+  - Tabella con dettagli e azione “Add/Remove favorite”
+- /cart
+  - “Calculate prices for the given items” (POST del tag Cart)
+  - Form: aggiunta righe prodotto (id, qty, ecc. secondo schema doc) e risultato con breakdown prezzi
+- /tickets
+  - Prepared tickets:
+    - GET /v1/prepared-tickets?vin=...&limit=&offset=
+  - Create ticket:
+    - POST /v1/tickets (schema doc)
+  - UI: search VIN + paginazione + dettaglio ticket creato
+- /chats
+  - GET /v1/chats/{chatId}
+  - UI: input chatId, fetch, mostra messaggi/metadati
+- /employees
+  - GET list employees
+  - POST add employee
+  - GET employee (employeeId o “me”)
+  - PUT change employee
+  - UI: tabella + modale add/edit
+- /service-center
+  - GET service center
+  - GET service center status
+- /system
+  - GET countries
+  - GET currencies
+- /messenger
+  - GET channel
+  - POST translate text
+  - POST send control message
+  - POST create channel attachment
+  - GET channel attachments
+  - UI: tabs per funzionalità, con JSON viewer dei risultati
+
+SIDEBAR (vincoli)
+Sidebar con icone e voci:
+- Dashboard
+- Profile
+- Vehicles
+- Products
+- Cart
+- Tickets
+- Chats
+- Employees
+- Service Center
+- System
+- Messenger
+- Settings (opzionale, per tema/log out)
+In alto: logo + nome app. In basso: user mini-card + Logout.
+
+DESIGN SYSTEM
+- Usa shadcn/ui: Button, Input, Card, Table, Tabs, Dialog, DropdownMenu, Toast/Sonner
+- Layout: header con breadcrumb e actions
+- Stati:
+  - Skeleton loading
+  - Empty state con CTA
+  - Error state con retry
+
+API CLIENT (BFF)
+Implementa un client robusto:
+- file: apps/server/src/lib/apiClient.ts
+- Funzione request(path, options) che:
+  - Inietta Authorization: Bearer <access_token>
+  - Gestisce JSON
+  - Se 401: tenta refresh (se fattibile) o invalida sessione
+- Endpoint BFF:
+  - POST /auth/login-pincode (chiama /v2/authenticate/pincode)
+  - POST /auth/login-otp (chiama /v1/authenticate/otp-login)
+  - POST /auth/forgot-password (chiama l’endpoint doc)
+  - POST /auth/logout
+  - GET /session (ritorna info minima per UI: isAuthenticated, user/customer summary)
+  - Proxy REST:
+    - GET /proxy/* (mappa su GET delle API)
+    - POST /proxy/*
+    - PUT /proxy/*
+    - DELETE /proxy/*
+  Suggerimento: crea route specifiche per ogni pagina (più pulito) INVECE di un proxy generico, ma puoi avere entrambe (proxy per debug).
+
+FRONTEND DATA LAYER
+- React Query con query keys standard:
+  - ["userMe"], ["customerMe"], ["wallet"], ["vehicleMakes"], ["ticketsPrepared", vin, limit, offset], ecc.
+- Mutations: edit customer, add/remove favorite, calculate cart, create ticket, employee add/edit, messenger actions
+- Error handling centralizzato con toast.
+
+QUALITÀ CODICE (vincoli)
+- TypeScript strict
+- Componenti riusabili: DataTable, PageHeader, EmptyState, ErrorPanel, JsonViewer
+- Nessun placeholder finto: se un endpoint non è disponibile in doc, non inventarlo.
+  - In quel caso: crea UI che spiega “Endpoint non presente” e disabilita la funzione, MA SOLO se davvero non esiste.
+- Aggiungi commenti solo dove serve.
+
+DELIVERABLE
+1) Struttura cartelle completa (monorepo)
+2) Codice completo per web + server
+3) README: setup env, run dev, build, note su CORS/token
+4) .env.example
+5) Qualche dato di esempio nei form (VIN esempio, connector_uuid esempio) SENZA hardcodare segreti
+
+PRIMA DI SCRIVERE IL CODICE
+- Leggi la documentazione ReDoc del link e ricava:
+  - endpoint precisi
+  - path, query params, request body schema
+  - security (OAuth2 / JifelineAuthorizer / none)
+- Poi implementa in modo aderente.
+
+OUTPUT
+Stampa direttamente i file con percorso e contenuto, in ordine, pronti da copiare nel progetto Replit.
