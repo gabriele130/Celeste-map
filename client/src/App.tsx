@@ -1,14 +1,13 @@
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
-import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
@@ -24,25 +23,6 @@ import SystemPage from "@/pages/system";
 import MessengerPage from "@/pages/messenger";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const [location] = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="space-y-4 w-full max-w-md p-6">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-8 w-1/2" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Redirect to={`/login?redirect=${encodeURIComponent(location)}`} />;
-  }
-
   return <>{children}</>;
 }
 
