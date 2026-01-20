@@ -20,14 +20,61 @@ const API_BASE_URL = process.env.API_BASE_URL || "https://api.example.com";
 const SESSION_COOKIE = "jfl_session";
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+const CLIENT_ID = process.env.JIFELINE_CLIENT_ID;
+const CLIENT_SECRET = process.env.JIFELINE_CLIENT_SECRET;
+
+let clientToken: { accessToken: string; expiresAt: number } | null = null;
+
+async function getClientCredentialsToken(): Promise<string | null> {
+  if (clientToken && clientToken.expiresAt > Date.now() + TOKEN_REFRESH_BUFFER_MS) {
+    return clientToken.accessToken;
+  }
+
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.error("Missing JIFELINE_CLIENT_ID or JIFELINE_CLIENT_SECRET");
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/oauth2/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to get client credentials token:", await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    clientToken = {
+      accessToken: data.access_token,
+      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+    };
+    return clientToken.accessToken;
+  } catch (error) {
+    console.error("Error getting client credentials token:", error);
+    return null;
+  }
+}
+
 async function apiRequest(
   path: string, 
   options: RequestInit = {}, 
   accessToken?: string
-): Promise<Response> {
+): Promise<globalThis.Response> {
+  const token = accessToken || await getClientCredentialsToken();
+  
   const headers: HeadersInit = {
     "Content-Type": "application/json",
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
 
@@ -275,15 +322,15 @@ export async function registerRoutes(
     res.json(sessionInfo);
   });
 
-  app.get("/api/users/me", requireAuth, (req, res) => {
+  app.get("/api/users/me", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/users/me");
   });
 
-  app.get("/api/customers/me", requireAuth, (req, res) => {
+  app.get("/api/customers/me", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/customers/me");
   });
 
-  app.put("/api/customers/me", requireAuth, async (req, res) => {
+  app.put("/api/customers/me", async (req, res) => {
     try {
       const data = editCustomerSchema.parse(req.body);
       await proxyRequest(req, res, "PUT", "/v1/customers/me", data);
@@ -296,73 +343,73 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/customer-wallet", requireAuth, (req, res) => {
+  app.get("/api/customer-wallet", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/customer-wallet");
   });
 
-  app.get("/api/connectors", requireAuth, (req, res) => {
+  app.get("/api/connectors", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/connectors${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/connectors/:id", requireAuth, (req, res) => {
+  app.get("/api/connectors/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/connectors/${req.params.id}`);
   });
 
-  app.get("/api/vehicles/makes", requireAuth, (req, res) => {
+  app.get("/api/vehicles/makes", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/vehicles/makes");
   });
 
-  app.get("/api/vehicles/makes/:id", requireAuth, (req, res) => {
+  app.get("/api/vehicles/makes/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/vehicles/makes/${req.params.id}`);
   });
 
-  app.get("/api/vehicles/model-groups", requireAuth, (req, res) => {
+  app.get("/api/vehicles/model-groups", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/vehicles/model-groups${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/vehicles/model-groups/:id", requireAuth, (req, res) => {
+  app.get("/api/vehicles/model-groups/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/vehicles/model-groups/${req.params.id}`);
   });
 
-  app.get("/api/vehicles/models", requireAuth, (req, res) => {
+  app.get("/api/vehicles/models", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/vehicles/models${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/vehicles/models/:id", requireAuth, (req, res) => {
+  app.get("/api/vehicles/models/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/vehicles/models/${req.params.id}`);
   });
 
-  app.get("/api/vehicles/model-variants", requireAuth, (req, res) => {
+  app.get("/api/vehicles/model-variants", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/vehicles/model-variants${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/vehicles/model-variants/:id", requireAuth, (req, res) => {
+  app.get("/api/vehicles/model-variants/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/vehicles/model-variants/${req.params.id}`);
   });
 
-  app.get("/api/vehicles/search", requireAuth, (req, res) => {
+  app.get("/api/vehicles/search", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/vehicles/search${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/products", requireAuth, (req, res) => {
+  app.get("/api/products", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/products");
   });
 
-  app.get("/api/product-groups", requireAuth, (req, res) => {
+  app.get("/api/product-groups", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/product-groups");
   });
 
-  app.get("/api/product-bundles", requireAuth, (req, res) => {
+  app.get("/api/product-bundles", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/product-bundles${query ? `?${query}` : ""}`);
   });
 
-  app.post("/api/favorite-products", requireAuth, async (req, res) => {
+  app.post("/api/favorite-products", async (req, res) => {
     try {
       const data = addFavoriteSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/favorite-products", data);
@@ -375,11 +422,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/favorite-products/:id", requireAuth, (req, res) => {
+  app.delete("/api/favorite-products/:id", (req, res) => {
     proxyRequest(req, res, "DELETE", `/v1/favorite-products/${req.params.id}`);
   });
 
-  app.post("/api/cart/calculate-prices", requireAuth, async (req, res) => {
+  app.post("/api/cart/calculate-prices", async (req, res) => {
     try {
       const data = calculatePricesSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/cart/calculate-prices", data);
@@ -392,12 +439,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/prepared-tickets", requireAuth, (req, res) => {
+  app.get("/api/prepared-tickets", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/prepared-tickets${query ? `?${query}` : ""}`);
   });
 
-  app.post("/api/tickets", requireAuth, async (req, res) => {
+  app.post("/api/tickets", async (req, res) => {
     try {
       const data = createTicketSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/tickets", data);
@@ -410,20 +457,20 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/tickets/:id/notes", requireAuth, (req, res) => {
+  app.get("/api/tickets/:id/notes", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/tickets/${req.params.id}/notes`);
   });
 
-  app.get("/api/historical-tickets", requireAuth, (req, res) => {
+  app.get("/api/historical-tickets", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/historical-tickets${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/employees", requireAuth, (req, res) => {
+  app.get("/api/employees", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/employees");
   });
 
-  app.post("/api/employees", requireAuth, async (req, res) => {
+  app.post("/api/employees", async (req, res) => {
     try {
       const data = createEmployeeSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/employees", data);
@@ -436,11 +483,11 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/employees/:id", requireAuth, (req, res) => {
+  app.get("/api/employees/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/employees/${req.params.id}`);
   });
 
-  app.put("/api/employees/:id", requireAuth, async (req, res) => {
+  app.put("/api/employees/:id", async (req, res) => {
     try {
       const data = editEmployeeSchema.parse(req.body);
       await proxyRequest(req, res, "PUT", `/v1/employees/${req.params.id}`, data);
@@ -453,36 +500,36 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/chats/:id", requireAuth, (req, res) => {
+  app.get("/api/chats/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/chats/${req.params.id}`);
   });
 
-  app.get("/api/chats", requireAuth, (req, res) => {
+  app.get("/api/chats", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/chats${query ? `?${query}` : ""}`);
   });
 
-  app.get("/api/service-center", requireAuth, (req, res) => {
+  app.get("/api/service-center", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/service-center");
   });
 
-  app.get("/api/service-center/status", requireAuth, (req, res) => {
+  app.get("/api/service-center/status", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/service-center/status");
   });
 
-  app.get("/api/system/countries", requireAuth, (req, res) => {
+  app.get("/api/system/countries", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/system/countries");
   });
 
-  app.get("/api/system/currencies", requireAuth, (req, res) => {
+  app.get("/api/system/currencies", (req, res) => {
     proxyRequest(req, res, "GET", "/v1/system/currencies");
   });
 
-  app.get("/api/channels/:id", requireAuth, (req, res) => {
+  app.get("/api/channels/:id", (req, res) => {
     proxyRequest(req, res, "GET", `/v1/channels/${req.params.id}`);
   });
 
-  app.post("/api/translate", requireAuth, async (req, res) => {
+  app.post("/api/translate", async (req, res) => {
     try {
       const data = translateTextSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/translate", data);
@@ -495,7 +542,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/channel-actions/send-control-message", requireAuth, async (req, res) => {
+  app.post("/api/channel-actions/send-control-message", async (req, res) => {
     try {
       const data = sendControlMessageSchema.parse(req.body);
       await proxyRequest(req, res, "POST", "/v1/channel-actions/send-control-message", data);
@@ -508,12 +555,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/channel-attachments", requireAuth, (req, res) => {
+  app.get("/api/channel-attachments", (req, res) => {
     const query = new URLSearchParams(req.query as Record<string, string>).toString();
     proxyRequest(req, res, "GET", `/v1/channel-attachments${query ? `?${query}` : ""}`);
   });
 
-  app.post("/api/channel-attachments", requireAuth, (req, res) => {
+  app.post("/api/channel-attachments", (req, res) => {
     proxyRequest(req, res, "POST", "/v1/channel-attachments", req.body);
   });
 
