@@ -1,0 +1,6 @@
+{
+  "watch": ["server"],
+  "ext": "ts,js,json",
+  "ignore": ["node_modules"],
+  "exec": "npx cross-env NODE_ENV=development tsx server/index.ts"
+}
